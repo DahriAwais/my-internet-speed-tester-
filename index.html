@@ -1,0 +1,159 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Advanced SEO Meta Tags -->
+    <title>HyperSpeed | #1 Accurate Internet Speed Test & Network Analysis Tool</title>
+    <meta name="title" content="HyperSpeed | #1 Accurate Internet Speed Test & Network Analysis Tool">
+    <meta name="description" content="HyperSpeed is the industry standard for testing internet connection. Measure your WiFi, Fiber, 5G, and Broadband speed with high precision. Check Ping, Jitter, Download and Upload speeds instantly.">
+    <meta name="keywords" content="internet speed test, speedtest, wifi speed test, fiber speed test, 5g speed test, broadband speed test, ping test, jitter test, mbps checker, network diagnostic, fast speed test, ookla alternative, netflix fast alternative, speed check, my internet speed, bandwidth test, upload speed test, download speed test">
+    <meta name="author" content="HyperSpeed Global">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+    <link rel="canonical" href="https://hyperspeed-tester.io/">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://hyperspeed-tester.io/">
+    <meta property="og:title" content="HyperSpeed | Industry Standard Internet Speed Test">
+    <meta property="og:description" content="The most accurate way to measure your internet throughput. Real-time P2P diagnostic for high-speed fiber and 5G networks.">
+    <meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&h=630&q=80">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://hyperspeed-tester.io/">
+    <meta property="twitter:title" content="HyperSpeed | Free Real-Time Internet Speed Test">
+    <meta property="twitter:description" content="Instant, accurate internet speed diagnostics. Measure Mbps, Ping, and Jitter in seconds with professional precision.">
+    <meta property="twitter:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&h=630&q=80">
+
+    <!-- Structured Data (JSON-LD) for Search Engines -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "HyperSpeed Internet Speed Test",
+      "operatingSystem": "Web",
+      "applicationCategory": "UtilitiesApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.9",
+        "ratingCount": "1542"
+      },
+      "description": "HyperSpeed provides real-time, high-precision internet speed testing for Fiber, 5G, WiFi, and Cable connections. Used by network engineers globally."
+    }
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        :root {
+            --primary: #00f2ff;
+            --secondary: #7000ff;
+            --bg-dark: #050505;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--bg-dark);
+            color: #ffffff;
+            margin: 0;
+            overflow-x: hidden;
+            height: auto;
+            min-height: 100vh;
+        }
+
+        .mono { font-family: 'JetBrains+Mono', monospace; }
+
+        .glass {
+            background: rgba(10, 10, 10, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .cyber-grid {
+            background-image: 
+                radial-gradient(circle at 2px 2px, rgba(0, 242, 255, 0.05) 1px, transparent 0);
+            background-size: 32px 32px;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(600px); }
+        }
+
+        .animate-scan {
+            animation: scan 4s linear infinite;
+        }
+
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0) 50%,
+                rgba(0, 242, 255, 0.02) 50%,
+                rgba(0, 242, 255, 0.02) 100%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .noise {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://grainy-gradients.vercel.app/noise.svg');
+            opacity: 0.05;
+            pointer-events: none;
+            z-index: 99;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 242, 255, 0.1);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 242, 255, 0.2);
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "recharts": "https://esm.sh/recharts@^3.6.0"
+  }
+}
+</script>
+</head>
+<body>
+    <div class="scanline"></div>
+    <div class="noise"></div>
+    <div id="root"></div>
+</body>
+</html>

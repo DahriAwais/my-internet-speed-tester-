@@ -1,0 +1,5 @@
+{
+  "name": "HyperSpeed AI",
+  "description": "A high-performance internet speed tester with real-time visualization and AI-driven network health insights using Gemini.",
+  "requestFramePermissions": []
+}
