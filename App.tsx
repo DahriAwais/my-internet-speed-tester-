@@ -1,37 +1,56 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
+import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { TestPhase, SpeedResults } from './types';
 import Gauge from './components/Gauge';
 import StatsGrid from './components/StatsGrid';
 
-const DOWNLOAD_URL = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=5000&q=80';
+const DOWNLOAD_URL = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=2000&q=80';
 const UPLOAD_TARGET = 'https://httpbin.org/post';
 
-const AdSidebar: React.FC<{ side: 'left' | 'right' }> = ({ side }) => (
-  <aside className={`hidden xl:flex flex-col gap-4 w-[160px] 2xl:w-[300px] h-fit sticky top-12`} aria-label="Sponsor Links">
-    <div className="text-[9px] mono text-slate-600 uppercase tracking-widest mb-1 text-center font-bold">Advertisement</div>
-    <div className="glass border-white/5 rounded-2xl w-full h-[600px] flex flex-col items-center justify-center p-4 relative overflow-hidden group">
-      <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-50"></div>
-      <div className="relative z-10 flex flex-col items-center text-center">
-        <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-          <i className="fa-solid fa-rectangle-ad text-slate-500"></i>
-        </div>
-        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter mb-2">Ezoic Placeholder</div>
-        <div className="h-px w-8 bg-white/10 mb-4"></div>
-        <p className="text-[9px] text-slate-600 leading-relaxed px-2">High-performance network nodes powering your experience.</p>
-      </div>
-      <div className="absolute top-0 left-0 w-full h-1 bg-cyan-500/10 animate-scan"></div>
-    </div>
-    <div className="glass border-white/5 rounded-2xl w-full h-[250px] flex items-center justify-center p-4 mt-4">
-      <div className="text-[9px] font-bold text-slate-700 uppercase">Square Ad Unit</div>
-    </div>
-  </aside>
-);
+const playSound = (type: 'start' | 'phase' | 'complete' | 'tick' | 'uploadTick') => {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+
+    const createOsc = (freq: number, type: OscillatorType, duration: number, gainValue: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(gainValue, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + duration);
+    };
+
+    switch (type) {
+      case 'start':
+        createOsc(150, 'sine', 0.6, 0.3);
+        break;
+      case 'phase':
+        createOsc(523, 'triangle', 0.3, 0.15);
+        break;
+      case 'tick': 
+        createOsc(1200 + Math.random() * 500, 'sine', 0.08, 0.05);
+        break;
+      case 'uploadTick': 
+        createOsc(3000 + Math.random() * 500, 'square', 0.04, 0.02);
+        break;
+      case 'complete':
+        [523, 659, 783, 1046].forEach((f, i) => {
+          createOsc(f, 'sine', 1.0, 0.15);
+        });
+        break;
+    }
+  } catch (e) {}
+};
 
 const App: React.FC = () => {
   const [phase, setPhase] = useState<TestPhase>(TestPhase.READY);
-  const [statusMessage, setStatusMessage] = useState<string>('');
+  const [statusMessage, setStatusMessage] = useState<string>('READY TO SCAN');
   const [results, setResults] = useState<SpeedResults>({
     download: 0,
     upload: 0,
@@ -45,387 +64,272 @@ const App: React.FC = () => {
 
   const resetTest = () => {
     setPhase(TestPhase.READY);
-    setStatusMessage('');
+    setStatusMessage('READY TO SCAN');
     setResults({ download: 0, upload: 0, ping: 0, jitter: 0, timestamp: Date.now() });
     setCurrentSpeed(0);
     setHistory([]);
     setError(null);
   };
 
-  const measurePing = async () => {
-    setStatusMessage('Synchronizing Nodes...');
-    const pings: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      const start = performance.now();
-      try {
-        await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors', cache: 'no-cache' });
-        pings.push(performance.now() - start);
-      } catch (e) {
-        pings.push(20 + Math.random() * 30);
-      }
-    }
-    const avgPing = pings.reduce((a, b) => a + b, 0) / pings.length;
-    const jitter = Math.max(...pings) - Math.min(...pings);
-    return { ping: Math.round(avgPing), jitter: Math.round(jitter) };
-  };
-
   const startTest = async () => {
+    playSound('start');
     setPhase(TestPhase.PINGING);
-    setHistory([]);
+    setStatusMessage('LATENCY CHECK...');
+    setError(null);
     
-    const pingData = await measurePing();
-    setResults(prev => ({ ...prev, ...pingData }));
+    // --- QUICK PING (3 samples) ---
+    const pings: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const s = performance.now();
+      try {
+        await fetch(`https://www.google.com/favicon.ico?cb=${Date.now()}`, { mode: 'no-cors', cache: 'no-cache' });
+        pings.push(performance.now() - s);
+      } catch (e) {
+        pings.push(10 + Math.random() * 5);
+      }
+      await new Promise(r => setTimeout(r, 50));
+    }
+    const ping = Math.round(pings.reduce((a, b) => a + b, 0) / pings.length);
+    const jitter = Math.round(Math.max(...pings) - Math.min(...pings));
+    setResults(prev => ({ ...prev, ping, jitter }));
 
-    // Download Phase
+    // --- INSTANT DOWNLOAD (4-second cap) ---
     setPhase(TestPhase.DOWNLOAD);
-    setStatusMessage('Calculating Download Speed...');
+    setStatusMessage('CALCULATING DOWNLOAD SPEED');
+    playSound('phase');
+    
+    let finalDown = 0;
     try {
       const start = performance.now();
-      const response = await fetch(DOWNLOAD_URL, { cache: 'no-cache' });
-      if (!response.body) throw new Error("Stream unavailable");
+      const response = await fetch(`${DOWNLOAD_URL}&cb=${Date.now()}`, { cache: 'no-cache' });
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error();
       
-      const reader = response.body.getReader();
-      let totalReceived = 0;
-      let lastTime = start;
-      let lastReceived = 0;
+      let received = 0;
+      let lastUpd = start;
+      let lastRec = 0;
 
       while(true) {
         const {done, value} = await reader.read();
-        if (done) break;
-        totalReceived += value.length;
-        
         const now = performance.now();
-        const elapsedTotal = (now - start) / 1000;
+        const elapsed = (now - start) / 1000;
         
-        // Instant speed calculation (every ~100ms)
-        if (now - lastTime > 100) {
-           const chunkElapsed = (now - lastTime) / 1000;
-           const chunkReceived = totalReceived - lastReceived;
-           const instantMbps = (chunkReceived * 8) / (chunkElapsed * 1000000);
-           
-           // Smooth the speed with the total average to avoid jittery gauge
-           const avgMbps = (totalReceived * 8) / (elapsedTotal * 1000000);
-           const smoothedSpeed = (instantMbps * 0.3) + (avgMbps * 0.7);
-           
-           setCurrentSpeed(smoothedSpeed);
-           setHistory(prev => [...prev.slice(-49), { time: prev.length, speed: smoothedSpeed }]);
-           
-           lastTime = now;
-           lastReceived = totalReceived;
+        if (done || elapsed > 4.0) { 
+          if (elapsed > 0) finalDown = (received * 8) / (elapsed * 1000000);
+          reader.cancel();
+          break;
+        }
+
+        if (value) {
+          received += value.length;
+          if (now - lastUpd > 60) {
+            const instant = ((received - lastRec) * 8) / ((now - lastUpd) / 1000 * 1000000);
+            setCurrentSpeed(instant);
+            setHistory(p => [...p.slice(-40), { time: p.length, speed: instant }]);
+            playSound('tick');
+            lastUpd = now;
+            lastRec = received;
+          }
         }
       }
-      
-      const finalElapsed = (performance.now() - start) / 1000;
-      const finalSpeed = (totalReceived * 8) / (finalElapsed * 1000000);
-      setResults(prev => ({ ...prev, download: finalSpeed }));
-    } catch (err) {
-      setError("Download path interrupted.");
+      setResults(prev => ({ ...prev, download: finalDown }));
+    } catch (e) { 
+      setError("Downlink Aborted"); 
       setResults(prev => ({ ...prev, download: 0 }));
     }
 
-    // Upload Phase
+    // --- INSTANT UPLOAD (3-second cap + 2MB payload) ---
     setPhase(TestPhase.UPLOAD);
-    setStatusMessage('Calculating Upload Speed...');
+    setStatusMessage('CALCULATING UPLOAD SPEED');
+    playSound('phase');
     setCurrentSpeed(0);
     setHistory([]);
-    try {
-      const dataSize = 5000000; // 5MB for better calculation
-      const data = new Uint8Array(dataSize);
-      const entropyChunk = 65536;
-      for (let i = 0; i < dataSize; i += entropyChunk) {
-        const remaining = Math.min(entropyChunk, dataSize - i);
-        crypto.getRandomValues(data.subarray(i, i + remaining));
-      }
-      
-      const start = performance.now();
-      // Use a more responsive upload target if available, httpbin is okay but slow
-      const response = await fetch(UPLOAD_TARGET, {
-        method: 'POST',
-        body: data,
-        cache: 'no-cache'
-      });
-      
-      if (!response.ok) throw new Error("Gateway Reject");
 
-      const elapsed = (performance.now() - start) / 1000;
-      const uploadMbps = (dataSize * 8) / (elapsed * 1000000);
-      
-      setCurrentSpeed(uploadMbps);
-      setHistory([{ time: 0, speed: uploadMbps * 0.5 }, { time: 1, speed: uploadMbps * 0.8 }, { time: 2, speed: uploadMbps }]);
-      setResults(prev => ({ ...prev, upload: uploadMbps }));
-    } catch (err) {
-      setError("Upload sequence failed.");
+    let finalUp = 0;
+    try {
+      const dataSize = 2 * 1024 * 1024;
+      const data = new Uint8Array(dataSize);
+      for (let i = 0; i < dataSize; i += 65536) {
+        const remaining = Math.min(65536, dataSize - i);
+        window.crypto.getRandomValues(data.subarray(i, i + remaining));
+      }
+
+      finalUp = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const start = performance.now();
+        let lastSampleTime = start;
+        let lastSampleBytes = 0;
+        let runningEstimate = 0;
+
+        const timeoutId = setTimeout(() => {
+          xhr.abort();
+          resolve(runningEstimate || 0);
+        }, 3000); 
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const now = performance.now();
+            const elapsedSinceStart = (now - start) / 1000;
+            const timeDiff = (now - lastSampleTime) / 1000;
+
+            if (timeDiff > 0.05) { 
+              const byteDiff = e.loaded - lastSampleBytes;
+              const instantSpeed = (byteDiff * 8) / (timeDiff * 1000000);
+              
+              if (instantSpeed > 0) {
+                setCurrentSpeed(instantSpeed);
+                setHistory(p => [...p.slice(-40), { time: p.length, speed: instantSpeed }]);
+                playSound('uploadTick');
+                runningEstimate = (e.loaded * 8) / (elapsedSinceStart * 1000000);
+              }
+              lastSampleTime = now;
+              lastSampleBytes = e.loaded;
+            }
+          }
+        };
+
+        xhr.onload = () => {
+          clearTimeout(timeoutId);
+          const totalElapsed = (performance.now() - start) / 1000;
+          resolve((dataSize * 8) / (totalElapsed * 1000000));
+        };
+        xhr.onerror = () => {
+          clearTimeout(timeoutId);
+          reject(new Error("Uplink Failure"));
+        };
+        xhr.onabort = () => clearTimeout(timeoutId);
+        xhr.open('POST', UPLOAD_TARGET, true);
+        xhr.send(data);
+      });
+      setResults(prev => ({ ...prev, upload: finalUp }));
+    } catch (e: any) { 
+      setError(e.message || "Uplink Aborted"); 
       setResults(prev => ({ ...prev, upload: 0 }));
     }
 
-    setStatusMessage('Calculation OK!');
     setPhase(TestPhase.COMPLETE);
+    setStatusMessage('DIAGNOSTIC FINALIZED');
+    playSound('complete');
   };
 
-  const getPhaseTheme = () => {
-    switch (phase) {
-      case TestPhase.DOWNLOAD: return { color: '#00f2ff', label: 'Inbound Flow' };
-      case TestPhase.UPLOAD: return { color: '#7000ff', label: 'Outbound Flow' };
-      case TestPhase.PINGING: return { color: '#ffea00', label: 'Synchronizing' };
-      default: return { color: '#00ff88', label: 'Terminal Ready' };
+  useEffect(() => {
+    if (phase === TestPhase.COMPLETE) {
+      setCurrentSpeed(results.download + results.upload);
     }
-  };
+  }, [phase, results.download, results.upload]);
 
-  const theme = getPhaseTheme();
+  const theme = phase === TestPhase.DOWNLOAD ? { color: '#00f2ff', label: 'DOWNLOAD' } 
+             : phase === TestPhase.UPLOAD ? { color: '#d946ef', label: 'UPLOAD' }
+             : phase === TestPhase.PINGING ? { color: '#fbbf24', label: 'LATENCY' }
+             : phase === TestPhase.COMPLETE ? { color: '#10b981', label: 'TOTAL CAPACITY' }
+             : { color: '#818cf8', label: 'READY' };
 
   return (
-    <div className="min-h-screen cyber-grid flex flex-col p-4 md:p-8 xl:p-12">
-      <header className="flex justify-between items-center mb-8 xl:mb-12 relative z-50 w-full max-w-[1800px] mx-auto">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 glass rounded-2xl flex items-center justify-center border-cyan-500/30 shadow-[0_0_15px_rgba(0,242,255,0.2)]">
-            <i className="fa-solid fa-gauge-high text-cyan-400 text-xl" aria-hidden="true"></i>
+    <div className="min-h-screen cyber-grid flex flex-col p-4 md:p-8 lg:p-12 overflow-x-hidden">
+      <header className="flex justify-between items-center mb-10 md:mb-16 w-full max-w-7xl mx-auto">
+        <div className="flex items-center gap-4 md:gap-6">
+          <div className="w-12 h-12 md:w-16 md:h-16 glass rounded-[15px] md:rounded-[20px] flex items-center justify-center border-cyan-500/30 shadow-[0_0_30px_rgba(0,242,255,0.2)]">
+            <i className="fa-solid fa-gauge-high text-cyan-400 text-xl md:text-3xl"></i>
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-tighter mono">HYPER<span className="text-cyan-400">SPEED</span></h1>
-            <div className="text-[10px] text-slate-500 mono font-bold leading-none uppercase tracking-[0.4em]">Professional Speed Diagnostic</div>
+            <h1 className="text-2xl md:text-4xl font-black mono uppercase tracking-tighter leading-none">HYPER<span className="text-cyan-400">SPEED</span></h1>
+            <p className="text-[8px] md:text-[10px] text-slate-600 font-bold tracking-[0.5em] uppercase mt-1">Instant Throughput Lab</p>
           </div>
         </div>
         {phase !== TestPhase.READY && (
-           <button 
-           onClick={resetTest}
-           aria-label="Restart Speed Test"
-           className="glass px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:border-white/20 transition-all"
-         >
-           Reset
-         </button>
+           <button onClick={resetTest} className="glass px-6 md:px-10 py-3 md:py-4 rounded-[12px] md:rounded-[18px] text-[9px] md:text-[11px] font-black uppercase text-slate-400 hover:text-white transition-all active:scale-95 border-white/5">
+             Reset
+           </button>
         )}
       </header>
 
-      {/* Main 3-Column Content */}
-      <div className="flex-1 flex justify-center items-start gap-8 w-full max-w-[1800px] mx-auto">
-        
-        <AdSidebar side="left" />
-
-        <main className="flex-1 flex flex-col items-center gap-10 max-w-4xl w-full">
-          <section id="test-area" className="w-full flex flex-col items-center">
+      <main className="flex-1 flex flex-col items-center gap-10 md:gap-20 max-w-6xl w-full mx-auto">
+        {phase === TestPhase.READY ? (
+          <div className="flex flex-col items-center py-10 md:py-20">
+            <div className="text-center mb-10">
+              <h2 className="text-slate-500 font-black tracking-[0.5em] text-[10px] uppercase mb-4">Diagnostic Status</h2>
+              <div className="text-white text-xl md:text-2xl font-black tracking-tight mono animate-pulse">{statusMessage}</div>
+            </div>
             
-            {/* Real-time Status Indicator */}
-            {phase !== TestPhase.READY && (
-              <div className="mb-6 flex flex-col items-center animate-pulse">
-                <div className={`text-xs mono font-black uppercase tracking-[0.5em] px-4 py-1.5 rounded-full border border-white/10 ${phase === TestPhase.COMPLETE ? 'text-emerald-400 border-emerald-500/20' : 'text-cyan-400'}`}>
-                  {statusMessage}
-                </div>
-              </div>
-            )}
+            <button 
+              onClick={startTest}
+              className="relative w-56 h-56 md:w-72 md:h-72 rounded-full border-4 border-cyan-500/10 flex flex-col items-center justify-center group hover:scale-105 transition-all duration-700 bg-black/30 shadow-[0_0_80px_rgba(0,242,255,0.1)] overflow-hidden"
+            >
+              <div className="absolute inset-5 border border-cyan-500/10 rounded-full group-hover:rotate-180 transition-transform duration-[6s] border-dashed"></div>
+              <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <span className="text-6xl md:text-8xl font-black mono text-white group-hover:text-cyan-400 transition-colors drop-shadow-[0_0_30px_rgba(0,242,255,0.5)] z-10">GO</span>
+            </button>
+          </div>
+        ) : (
+          <div className="w-full space-y-8 md:space-y-16 animate-in fade-in duration-1000">
+            <div className="text-center">
+              <h2 className="text-slate-500 font-black tracking-[0.5em] text-[10px] uppercase mb-2">Network Phase</h2>
+              <div className="text-white text-lg md:text-xl font-black tracking-tight mono" style={{ color: theme.color }}>{statusMessage}</div>
+            </div>
 
-            {phase === TestPhase.READY ? (
-              <div className="flex flex-col items-center animate-in fade-in zoom-in duration-700 py-12">
-                <div className="relative group">
-                  <div className="absolute -inset-8 bg-cyan-500/20 blur-3xl rounded-full group-hover:bg-cyan-500/30 transition-all duration-700"></div>
-                  <button 
-                    onClick={startTest}
-                    aria-label="Start Internet Speed Test"
-                    className="relative w-64 h-64 md:w-72 md:h-72 rounded-full border-2 border-cyan-500/40 flex flex-col items-center justify-center group hover:scale-110 transition-all duration-500 bg-black/80 backdrop-blur-md shadow-[0_0_50px_rgba(0,242,255,0.1)]"
-                  >
-                    <div className="absolute inset-4 border border-cyan-500/10 rounded-full group-hover:rotate-180 transition-transform duration-1000 border-dashed"></div>
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-b from-cyan-500/5 to-transparent"></div>
-                    
-                    <span className="text-5xl font-black tracking-[0.2em] mono text-white group-hover:text-cyan-400 transition-colors">GO</span>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em] mt-4 opacity-70">Begin Diagnostic</span>
-                  </button>
-                </div>
-                <p className="mt-12 text-slate-500 mono text-xs tracking-widest text-center max-w-xs leading-relaxed">
-                   Industry-leading <strong>broadband speed test</strong> and <strong>network diagnostic</strong> tool.
-                </p>
-              </div>
-            ) : (
-              <div className="w-full space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-10">
-                  <div className="glass rounded-[40px] p-6 md:p-10 border-white/5 flex items-center justify-center relative overflow-hidden group min-h-[350px]">
-                    <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none bg-gradient-to-br from-cyan-500 to-transparent"></div>
-                    <Gauge 
-                      value={currentSpeed} 
-                      max={results.download > 500 ? 1000 : 500} 
-                      label={theme.label}
-                      unit="Mbps"
-                      color={theme.color}
-                    />
-                  </div>
-
-                  <div className="glass rounded-[40px] p-6 md:p-10 border-white/5 flex flex-col min-h-[350px]">
-                    <div className="flex justify-between items-center mb-8">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${phase === TestPhase.COMPLETE ? 'bg-emerald-400' : 'bg-cyan-500 animate-pulse'}`}></div>
-                        <span className="text-xs font-bold mono uppercase text-slate-400 tracking-widest">
-                          {phase === TestPhase.COMPLETE ? 'DATA PERSISTED' : 'Live Bandwidth Flux'}
-                        </span>
-                      </div>
-                      <div className="text-[10px] mono text-slate-600">60 SAMPLES / SEC</div>
-                    </div>
-                    <div className="flex-1 min-h-[200px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={history}>
-                          <defs>
-                            <linearGradient id="fluxGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor={theme.color} stopOpacity={0.5}/>
-                              <stop offset="100%" stopColor={theme.color} stopOpacity={0}/>
-                            </linearGradient>
-                          </defs>
-                          <Area 
-                            type="monotone" 
-                            dataKey="speed" 
-                            stroke={theme.color} 
-                            fill="url(#fluxGrad)" 
-                            strokeWidth={4}
-                            isAnimationActive={false}
-                          />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-
-                <StatsGrid 
-                  ping={results.ping} 
-                  jitter={results.jitter} 
-                  download={results.download} 
-                  upload={results.upload} 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-12">
+              <div className="glass rounded-[40px] md:rounded-[60px] p-6 md:p-14 flex items-center justify-center relative min-h-[350px] md:min-h-[480px] border-white/5 shadow-2xl">
+                <Gauge 
+                  value={currentSpeed} 
+                  max={2000} 
+                  label={theme.label}
+                  unit="Mbps"
+                  color={theme.color}
                 />
-
-                {phase === TestPhase.COMPLETE && (
-                  <div className="flex flex-col items-center gap-6 animate-in zoom-in duration-500">
-                    <div className="glass px-10 md:px-12 py-8 rounded-[32px] border-emerald-500/20 text-center relative overflow-hidden w-full">
-                      <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500/20"></div>
-                      <div className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.4em] mb-3">Calculation OK!</div>
-                      <p className="text-slate-400 text-sm mono">Your internet speed is {results.download.toFixed(1)} Mbps down and {results.upload.toFixed(1)} Mbps up.</p>
-                    </div>
-                    <button 
-                      onClick={resetTest}
-                      className="px-12 md:px-16 py-5 md:py-6 bg-white text-black font-black rounded-2xl hover:bg-cyan-400 transition-all shadow-[0_0_50px_rgba(255,255,255,0.1)] active:scale-95 text-sm tracking-[0.2em] uppercase"
-                    >
-                      Run New Speed Check
-                    </button>
-                  </div>
-                )}
               </div>
-            )}
-          </section>
 
-          {/* EXTENDED SEO ARTICLE SECTION */}
-          <article className="w-full mt-12 space-y-16 pb-20 border-t border-white/5 pt-16">
-            <header className="space-y-4">
-              <h2 className="text-4xl font-black heading-font tracking-tight text-white uppercase leading-none">
-                The Ultimate Guide to <span className="text-cyan-400">Internet Speed Testing</span>
-              </h2>
-              <p className="text-lg text-slate-400 font-medium">
-                Everything you need to know about measuring Mbps, Ping, and Jitter on Fiber, 5G, and WiFi networks.
-              </p>
-            </header>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-              <section className="space-y-6">
-                <h3 className="text-2xl font-bold text-white uppercase tracking-tight">What is an <span className="text-cyan-400">Internet Speed Test?</span></h3>
-                <p className="text-slate-400 leading-relaxed text-sm">
-                  An <strong>internet speed test</strong> is a digital diagnostic tool designed to measure the performance of your connection between your local device and a remote server. At HyperSpeed, we use a <strong>high-precision P2P algorithm</strong> to ensure that your results are not skewed by browser overhead or local background processes.
-                </p>
-                <p className="text-slate-400 leading-relaxed text-sm">
-                  When you click the "GO" button, our system initiates three critical phases: <strong>Ping (Latency)</strong>, <strong>Download Speed</strong>, and <strong>Upload Speed</strong>. These three metrics together define the quality of your digital experience, whether you are <strong>gaming</strong>, <strong>streaming 4K video</strong>, or <strong>working from home</strong>.
-                </p>
-              </section>
-
-              <div className="glass rounded-3xl p-8 border-white/5 space-y-6">
-                <h3 className="text-xl font-bold text-white uppercase tracking-tight">Understanding Your <span className="text-cyan-400">Metrics</span></h3>
-                <div className="space-y-4">
-                  <div className="border-l-2 border-cyan-400 pl-4 py-1">
-                    <h4 className="text-sm font-bold text-white uppercase">Mbps (Download/Upload)</h4>
-                    <p className="text-xs text-slate-500 mt-1">Megabits per second. High Mbps means faster file transfers and buffer-free streaming.</p>
-                  </div>
-                  <div className="border-l-2 border-purple-400 pl-4 py-1">
-                    <h4 className="text-sm font-bold text-white uppercase">Ping (Latency)</h4>
-                    <p className="text-xs text-slate-500 mt-1">Measured in milliseconds (ms). Essential for real-time applications like online gaming and video calls.</p>
-                  </div>
-                  <div className="border-l-2 border-amber-400 pl-4 py-1">
-                    <h4 className="text-sm font-bold text-white uppercase">Jitter</h4>
-                    <p className="text-xs text-slate-500 mt-1">The variance in ping. High jitter can cause "rubber-banding" in games or distorted audio in calls.</p>
-                  </div>
+              <div className="glass rounded-[40px] md:rounded-[60px] p-6 md:p-10 flex flex-col min-h-[350px] md:min-h-[480px] border-white/5 shadow-2xl overflow-hidden">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-[11px] md:text-[13px] font-black mono text-slate-400 tracking-widest uppercase flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.color }}></div>
+                    Live Traffic
+                  </span>
+                  <div className="text-[9px] md:text-[11px] mono text-slate-500 bg-white/5 px-4 md:px-8 py-2 rounded-full border border-white/5 font-black">Ping: {results.ping}ms</div>
+                </div>
+                <div className="flex-1 min-h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={history}>
+                      <Area 
+                        type="monotone" 
+                        dataKey="speed" 
+                        stroke={theme.color} 
+                        fill={theme.color} 
+                        fillOpacity={0.15}
+                        strokeWidth={4}
+                        isAnimationActive={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
 
-            <section className="space-y-8">
-              <h3 className="text-3xl font-black text-white uppercase text-center">Why Rank <span className="text-cyan-400">HyperSpeed</span> First?</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                 {[
-                   { title: "Fiber Optimized", desc: "Engineered specifically for 1Gbps+ Fiber Optic networks to prevent speed capping." },
-                   { title: "5G Ready", desc: "Advanced sampling rates to handle the rapid fluctuations of 5G and LTE connections." },
-                   { title: "Privacy First", desc: "Your IP and network data are never sold. We provide pure diagnostics, no data mining." }
-                 ].map((feat, i) => (
-                   <div key={i} className="glass p-6 rounded-2xl border-white/5 hover:border-cyan-500/20 transition-all">
-                     <h4 className="font-bold text-cyan-400 mb-2 uppercase text-xs">{feat.title}</h4>
-                     <p className="text-xs text-slate-500 leading-relaxed">{feat.desc}</p>
-                   </div>
-                 ))}
-              </div>
-            </section>
+            <StatsGrid ping={results.ping} jitter={results.jitter} download={results.download} upload={results.upload} />
 
-            <section className="space-y-6 bg-white/5 p-8 md:p-12 rounded-[40px] border border-white/5">
-              <h3 className="text-2xl font-bold text-white uppercase">How to Get a <span className="text-cyan-400">Faster Speedtest</span> Result</h3>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                If your <strong>wifi speed test</strong> results are lower than expected, follow these pro tips to optimize your bandwidth:
-              </p>
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[
-                  "Use a Cat6 Ethernet cable for a direct wired connection.",
-                  "Restart your router to clear its internal cache.",
-                  "Close heavy background apps like Steam or BitTorrent.",
-                  "Update your network drivers and OS firmware.",
-                  "Move closer to your router (for WiFi tests).",
-                  "Disable any active VPNs which might throttle throughput."
-                ].map((tip, i) => (
-                  <li key={i} className="flex gap-3 items-center text-xs text-slate-300">
-                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
-                    {tip}
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="space-y-8">
-              <h3 className="text-2xl font-bold text-white uppercase tracking-tight">Global <span className="text-cyan-400">Search Keywords</span> We Master</h3>
-              <p className="text-slate-400 text-sm italic">
-                Our platform is optimized to help you find answers for: 
-                <strong> bandwidth checker</strong>, <strong>fastest speed test</strong>, 
-                <strong> internet speed meter</strong>, <strong>check my Mbps</strong>, 
-                <strong> router performance test</strong>, and <strong>ping tool</strong>.
-              </p>
-              <div className="glass p-10 rounded-[40px] border-white/5 text-center">
-                <h4 className="text-xl font-black text-white uppercase mb-4">Ready to test your <span className="text-cyan-400">broadband</span>?</h4>
-                <p className="text-slate-500 text-xs mb-8 max-w-xl mx-auto">
-                  Scroll back up and hit the GO button for the most reliable network analysis on the web. 
-                  HyperSpeed provides the transparent data you need to hold your ISP accountable.
-                </p>
-                <div className="flex justify-center gap-6">
-                   <a href="#test-area" className="text-cyan-400 hover:text-white mono text-[10px] font-bold uppercase tracking-widest transition-colors">↑ BACK TO TEST</a>
-                </div>
-              </div>
-            </section>
-          </article>
-        </main>
-
-        <AdSidebar side="right" />
-
-      </div>
-
-      <footer className="mt-auto py-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 opacity-50 w-full max-w-[1800px] mx-auto">
-        <div className="flex gap-8">
-          <div className="text-[9px] mono text-slate-500 uppercase tracking-widest flex items-center gap-2">
-             <div className="w-1 h-1 rounded-full bg-cyan-500"></div>
-             Direct Hardware Sampling
+            {phase === TestPhase.COMPLETE && (
+               <div className="glass p-10 md:p-20 rounded-[40px] md:rounded-[70px] border-emerald-500/20 text-center relative overflow-hidden group shadow-[0_60px_150px_rgba(0,0,0,0.9)] animate-in zoom-in duration-1000">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500/0 via-emerald-400 to-emerald-500/0"></div>
+                  <h2 className="text-emerald-400 font-black tracking-[1em] text-[9px] mb-10 md:mb-14 uppercase">Final Report Generated</h2>
+                  <div className="flex flex-col md:flex-row justify-center items-center gap-10 md:gap-40">
+                     <div className="text-center">
+                        <div className="text-6xl md:text-8xl font-black text-white mono mb-2 md:mb-4 tracking-tighter">{results.download > 99 ? Math.round(results.download) : results.download.toFixed(1)}</div>
+                        <div className="text-[10px] md:text-[12px] text-cyan-400 font-black tracking-[0.4em] uppercase">Download Mbps</div>
+                     </div>
+                     <div className="hidden md:block w-px h-24 bg-white/10"></div>
+                     <div className="text-center">
+                        <div className="text-6xl md:text-8xl font-black text-white mono mb-2 md:mb-4 tracking-tighter">{results.upload > 99 ? Math.round(results.upload) : results.upload.toFixed(1)}</div>
+                        <div className="text-[10px] md:text-[12px] text-purple-400 font-black tracking-[0.4em] uppercase">Upload Mbps</div>
+                     </div>
+                  </div>
+                  <button onClick={resetTest} className="mt-12 md:mt-20 px-12 md:px-24 py-5 md:py-8 bg-white text-black font-black rounded-[20px] md:rounded-[30px] hover:bg-cyan-400 transition-all uppercase text-[10px] md:text-[12px] tracking-[0.6em] shadow-[0_20px_50px_rgba(0,242,255,0.2)]">
+                    New Test
+                  </button>
+               </div>
+            )}
+            {error && <div className="text-rose-500 text-[10px] font-black text-center uppercase tracking-[0.6em] bg-rose-500/5 py-8 rounded-[30px] border border-rose-500/20">{error}</div>}
           </div>
-          <div className="text-[9px] mono text-slate-500 uppercase tracking-widest flex items-center gap-2">
-             <div className="w-1 h-1 rounded-full bg-cyan-500"></div>
-             Network Privacy Guard Active
-          </div>
-        </div>
-        <div className="text-[9px] mono text-slate-500 uppercase tracking-widest">
-           &copy; {new Date().getFullYear()} HyperSpeed Diagnostics • The World's #1 Precision Speedtest Tool
-        </div>
-      </footer>
+        )}
+      </main>
     </div>
   );
 };

@@ -14,53 +14,74 @@ const Gauge: React.FC<GaugeProps> = ({ value, max, label, unit, color, secondary
   const radius = 85;
   const circumference = 2 * Math.PI * radius;
   const clampedValue = Math.min(value, max);
+  
   const progress = (clampedValue / max) * 0.75; 
   const dashOffset = circumference * (1 - progress);
-  
   const rotation = (clampedValue / max) * 270 - 135;
 
+  const numericMarkers = max > 1000 
+    ? [0, 500, 1000, 1500, 2000]
+    : [0, 200, 400, 600, 800, 1000];
+    
   return (
-    <div className="relative flex flex-col items-center justify-center">
-      <svg className="w-72 h-72 lg:w-80 lg:h-80 drop-shadow-[0_0_15px_rgba(0,0,0,0.5)]" viewBox="0 0 200 200">
+    <div className="relative flex flex-col items-center justify-center w-full max-w-sm">
+      <svg className="w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 drop-shadow-[0_0_50px_rgba(0,0,0,0.9)]" viewBox="0 0 200 200">
         <defs>
           <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor={color} />
             <stop offset="100%" stopColor={secondaryColor} />
           </linearGradient>
           <filter id="glow">
-            <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+            <feGaussianBlur stdDeviation="3" result="blur"/>
             <feMerge>
-                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="blur"/>
                 <feMergeNode in="SourceGraphic"/>
             </feMerge>
           </filter>
         </defs>
         
-        {/* Subtle background glow */}
-        <circle cx="100" cy="100" r="95" fill={`url(#gaugeGradient)`} opacity="0.03" />
-
-        {/* Track */}
         <circle
           cx="100"
           cy="100"
           r={radius}
           fill="none"
-          stroke="#1e293b"
-          strokeWidth="10"
+          stroke="#0a0a10"
+          strokeWidth="14"
           strokeDasharray={`${circumference * 0.75} ${circumference * 0.25}`}
           strokeDashoffset={0}
           className="transform rotate-[135deg]"
           strokeLinecap="round"
         />
+
+        {numericMarkers.map((m) => {
+          const angle = (m / max) * 270 - 135;
+          const textR = radius - 18;
+          const tx = 100 + textR * Math.cos((angle - 90) * (Math.PI / 180));
+          const ty = 100 + textR * Math.sin((angle - 90) * (Math.PI / 180));
+
+          return (
+            <text 
+              key={m}
+              x={tx} 
+              y={ty} 
+              fill="#4b5563" 
+              fontSize="6" 
+              textAnchor="middle" 
+              alignmentBaseline="middle" 
+              className="mono font-bold select-none"
+            >
+              {m}
+            </text>
+          );
+        })}
         
-        {/* Progress */}
         <circle
           cx="100"
           cy="100"
           r={radius}
           fill="none"
           stroke="url(#gaugeGradient)"
-          strokeWidth="12"
+          strokeWidth="14"
           strokeDasharray={circumference}
           strokeDashoffset={dashOffset + (circumference * 0.25)}
           className="transition-all duration-300 ease-out transform rotate-[135deg]"
@@ -68,28 +89,29 @@ const Gauge: React.FC<GaugeProps> = ({ value, max, label, unit, color, secondary
           filter="url(#glow)"
         />
 
-        {/* Needle Hub */}
-        <circle cx="100" cy="100" r="8" fill="#1e293b" stroke="#334155" strokeWidth="1" />
-        <circle cx="100" cy="100" r="4" fill={color} />
+        <circle cx="100" cy="100" r="10" fill="#020617" stroke={color} strokeWidth="3" />
 
-        {/* Needle */}
-        <g className="transition-transform duration-300 ease-out origin-center" style={{ transform: `rotate(${rotation}deg)` }}>
+        <g 
+          className="transition-transform duration-300 ease-out origin-center" 
+          style={{ transform: `rotate(${rotation}deg)` }}
+        >
           <path
-            d="M98,100 L100,25 L102,100 Z"
+            d="M96,100 L100,18 L104,100 Z"
             fill={color}
             filter="url(#glow)"
           />
+          <circle cx="100" cy="100" r="4" fill="white" />
         </g>
       </svg>
       
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[-15px] text-center w-full">
-        <div className="text-5xl font-extrabold mono tracking-tighter glow-text leading-none">
-          {value > 100 ? value.toFixed(0) : value.toFixed(1)}
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[-15px] md:-translate-y-[-25px] text-center w-full pointer-events-none">
+        <div className="text-5xl md:text-7xl font-black mono tracking-tighter text-white drop-shadow-[0_0_30px_rgba(255,255,255,0.4)]">
+          {value > 99 ? Math.round(value) : value.toFixed(1)}
         </div>
-        <div className="text-xs text-slate-400 font-bold uppercase tracking-[0.2em] mt-2 opacity-80">{unit}</div>
+        <div className="text-[10px] md:text-[14px] text-slate-500 font-black uppercase tracking-[0.6em] mt-2 md:mt-3">{unit}</div>
       </div>
       
-      <div className="mt-4 px-4 py-1.5 rounded-full bg-slate-800/50 border border-slate-700/50 text-sm font-bold text-slate-300 heading-font uppercase tracking-widest">
+      <div className={`mt-6 md:mt-8 px-8 md:px-12 py-2 md:py-3 rounded-full bg-black/80 border border-white/10 text-[10px] md:text-[12px] font-black uppercase tracking-[0.5em] shadow-2xl transition-all duration-500`} style={{ borderColor: color, color }}>
         {label}
       </div>
     </div>
